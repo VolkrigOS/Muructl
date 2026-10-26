@@ -1,0 +1,57 @@
+muructl
+=======
+
+a minimal command-line service control utility for Linux
+
+
+HOW TO COMPILE
+==============
+
+run "make"
+
+to install, use "make install"
+
+if you want to install to a different root directory, define DESTDIR
+as your desired prefix.
+
+
+DESCRIPTION
+===========
+
+muructl is a minimal command-line utility for managing services
+through a Unix domain socket.
+
+It provides a simple interface for controlling services, with a
+focus on simplicity and minimal dependencies.
+
+
+COMMANDS
+========
+
+usage: muructl <command> [service]
+
+commands:
+  start NAME      Start service
+  stop NAME       Stop service
+  restart NAME    Restart service
+  status NAME     Show service status
+  list            List services
+
+
+REQUIREMENTS
+============
+
+muructl requires root privileges to run.
+
+The service control daemon must be running and listening on the
+configured Unix domain socket.
+
+Before starting a service, its service definition must exist in
+the configured services directory.
+
+
+DESIGN
+======
+
+muructl aims to keep its implementation small, straightforward,
+and easy to maintain.
