@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/un.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
@@ -121,8 +122,15 @@ static int start_service(const char *name, pid_t *pid)
     child = fork();
     if (child < 0) return -1;
     if (child == 0) {
+        if (setpgid(0, 0) < 0)
+            _exit(127);
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);   
         _exit(127);
+    }
+    if (setpgid(child, child) < 0 && errno != EACCES && errno != ESRCH) {
+        kill(child, SIGTERM);
+        (void)waitpid(child, NULL, 0);
+        return -1;
     }
     services[count] = (struct service) {
         .name = strdup(name),
@@ -146,7 +154,7 @@ static int stop_service(const char *name)
     for (size_t i = 0; i < SERVICES_MAX; i++)
     {
         if (services[i].name && strcmp(services[i].name, name) == 0)
-            return kill(services[i].pid, SIGTERM) == 0 ? 0 : 1;
+            return kill(-services[i].pid, SIGTERM) == 0 ? 0 : 1;
     }
     return 1;
 }
@@ -157,6 +165,7 @@ static void handle_client(int client)
     char response[256];
     char name[64];
     pid_t pid;
+    long rpid;
     ssize_t n = read(client, request, sizeof(request) - 1);
 
     if (n <= 0) return;
@@ -174,6 +183,13 @@ static void handle_client(int client)
             snprintf(response, sizeof(response), "stoped %s\n", name);
         else
             snprintf(response, sizeof(response), "failed to stop %s\n", name);
+    }
+    else if (sscanf(request, "stopid %ld", &rpid) == 1 && strncmp(request, "stopid ", 7) == 0)
+    {
+        if (kill(rpid, SIGTERM) == 0)
+            snprintf(response, sizeof(response), "stoped %ld\n", rpid);
+        else
+            snprintf(response, sizeof(response), "failed to stop %ld\n", rpid);
     }
     else if (strcmp(request, "list") == 0)
     {

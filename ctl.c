@@ -64,11 +64,11 @@ void usage(void)
         "usage: muructl <command> [service]\n"
         "\n"
         "commands:\n"
-        "  start NAME      Start service\n"
-        "  stop NAME       Stop service\n"
-        "  restart NAME    Restart service\n"
-        "  status NAME     Show service status\n"
-        "  list       List services\n");
+        "  start        NAME      Start service\n"
+        "  stop [-p]    NAME      Stop service\n"
+        "  restart [-p] NAME      Restart service\n"
+        "  status [-p]  NAME      Show service status\n"
+        "  list                   List services\n");
 }
 
 int s_start(const char *service)
@@ -102,12 +102,13 @@ int s_list(void)
     return send_command("list");
 }
 
-int s_stop(const char *service)
+int s_stop(const char *service, int p)
 {
     char command[4096];
+    int n;
 
-    if (snprintf(command, sizeof(command), "stop %s\n",
-        service) >= (int)sizeof(command)) {
+    n = snprintf(command, sizeof(command), p ? "stopid %s\n" : "stop %s\n", service);
+    if (n < 0 || (size_t)n >= sizeof(command)) {
         fprintf(stderr, "muructl: command too long\n");
         return 1;
     }
@@ -132,13 +133,25 @@ int main(int argc, char **argv)
         fprintf(stderr, "muructl: %s does not exist\n", MURU_SOCKET);
         return 1;
     }
-
     const char *command = argv[1];
     if (strcmp(command, "start") == 0 && argc == 3)
         return s_start(argv[2]);
 
     if (strcmp(command, "stop") == 0 && argc == 3)
-        return s_stop(argv[2]);
+        return s_stop(argv[2], 0);
+
+    if (strcmp(command, "stop") == 0 && argc == 4 && strcmp(argv[2], "-p") == 0) {
+        char *end;
+        long pid;
+
+        errno = 0;
+        pid = strtol(argv[3], &end, 10);
+        if (errno != 0 || *argv[3] == '\0' || *end != '\0' || pid <= 0) {
+            fprintf(stderr, "muructl: invalid PID: %s\n", argv[3]);
+            return 1;
+        }
+        return s_stop(argv[3], 1);
+    }
 
     if (strcmp(command, "list") == 0)
         return s_list();
