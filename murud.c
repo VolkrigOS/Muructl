@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 
 #define MURU_DIR          "/etc/muru"
 #define MURU_SERVICES_DIR MURU_DIR "/services"
@@ -159,6 +160,45 @@ static int stop_service(const char *name)
     return 1;
 }
 
+static int restart_service(const char *name, pid_t *pid)
+{
+    struct service *service = NULL;
+    pid_t old_pid;
+    struct timespec pause = { .tv_sec = 0, .tv_nsec = 50000000 };
+
+    for (size_t i = 0; i < SERVICES_MAX; i++) {
+        if (services[i].name && strcmp(services[i].name, name) == 0) {
+            service = &services[i];
+            break;
+        }
+    }
+    if (service == NULL)
+        return -1;
+
+    old_pid = service->pid;
+    if (kill(-old_pid, SIGTERM) < 0 && errno != ESRCH)
+        return -1;
+
+    /* Give the service a moment to exit cleanly before forcing it down. */
+    for (int i = 0; i < 40; i++) {
+        (void)waitpid(old_pid, NULL, WNOHANG);
+        if (kill(-old_pid, 0) < 0 && errno == ESRCH)
+            break;
+        (void)nanosleep(&pause, NULL);
+    }
+    if (kill(-old_pid, 0) == 0 || errno != ESRCH) {
+        (void)kill(-old_pid, SIGKILL);
+        while (waitpid(old_pid, NULL, 0) < 0 && errno == EINTR) {}
+    } else {
+        while (waitpid(old_pid, NULL, WNOHANG) < 0 && errno == EINTR) {}
+    }
+
+    free((void *)service->name);
+    free((void *)service->command);
+    *service = (struct service){0};
+    return start_service(name, pid);
+}
+
 static void handle_client(int client)
 {
     char request[4096];
@@ -190,6 +230,13 @@ static void handle_client(int client)
             snprintf(response, sizeof(response), "stoped %ld\n", rpid);
         else
             snprintf(response, sizeof(response), "failed to stop %ld\n", rpid);
+    }
+    else if (sscanf(request, "restart %63s", name) == 1 && strncmp(request, "restart ", 8) == 0)
+    {
+        if (restart_service(name, &pid) == 0)
+            snprintf(response, sizeof(response), "restarted %s (PID %ld)\n", name, (long)pid);
+        else
+            snprintf(response, sizeof(response), "failed to restart %s\n", name);
     }
     else if (strcmp(request, "list") == 0)
     {

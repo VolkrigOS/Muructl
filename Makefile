@@ -15,7 +15,8 @@ CFLAGS  = -Os \
           -fno-ident \
           -fomit-frame-pointer \
           -DNDEBUG \
-          -Wall -Wextra
+          -Wall -Wextra \
+          -static
 
 LDFLAGS = -flto \
           -Wl,--gc-sections \

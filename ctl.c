@@ -66,11 +66,10 @@ void usage(void)
         "commands:\n"
         "  start        NAME      Start service\n"
         "  stop [-p]    NAME      Stop service\n"
-        "  restart [-p] NAME      Restart service\n"
+        "  restart      NAME      Restart service\n"
         "  status [-p]  NAME      Show service status\n"
         "  list                   List services\n");
 }
-
 int s_start(const char *service)
 {
     char command[4096];
@@ -117,6 +116,22 @@ int s_stop(const char *service, int p)
 }
 
 
+int s_restart(const char *service)
+{
+    char command[4096];
+    int n;
+
+    n = snprintf(command, sizeof(command), "restart %s\n", service);
+
+    if (n < 0 || (size_t)n >= sizeof(command)) {
+        fprintf(stderr, "muructl: command too long\n");
+        return 1;
+    }
+
+    return send_command(command);
+}
+
+
 int main(int argc, char **argv) 
 {
     if (geteuid() != 0) {
@@ -153,10 +168,11 @@ int main(int argc, char **argv)
         return s_stop(argv[3], 1);
     }
 
+    if (strcmp(command, "restart") == 0 && argc == 3)
+        return s_restart(argv[2]);
+
     if (strcmp(command, "list") == 0)
         return s_list();
-
-    printf("%s", command);
 
     usage();
     return 1;
